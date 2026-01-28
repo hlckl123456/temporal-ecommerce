@@ -1,0 +1,12 @@
+{
+  "modelId": "claude-3-sonnet-training-001",
+  "datasetId": "anthropic-helpfulness-v2",
+  "hyperparameters": {
+    "learningRate": 0.0001,
+    "batchSize": 32,
+    "epochs": 100,
+    "optimizer": "AdamW"
+  },
+  "checkpointInterval": 10,
+  "randomSeed": 42
+}

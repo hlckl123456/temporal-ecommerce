@@ -7,3 +7,4 @@
 export * from './inventory';
 export * from './payment';
 export * from './shipping';
+export * from './ml-training';

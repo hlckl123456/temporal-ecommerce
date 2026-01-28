@@ -30,6 +30,7 @@ import {
   condition,
   sleep,
   CancellationScope,
+  workflowInfo,
 } from '@temporalio/workflow';
 import type { OrderInput, OrderState, ApprovalDecision } from '../types';
 
