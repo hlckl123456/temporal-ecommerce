@@ -1,8 +1,8 @@
-# 🛍️ Temporal E-commerce: Production-Grade Workflow Orchestration
+# 🛍️ Temporal Workflow Orchestration: Production-Grade Examples
 
 <p align="center">
-  <strong>Solving distributed transaction complexity with Temporal's durable execution engine</strong><br/>
-  <em>Demonstrating Saga Pattern (E-commerce) + ML Training Workflows (Checkpoint Recovery)</em>
+  <strong>Solving distributed systems complexity with Temporal's durable execution engine</strong><br/>
+  <em>Demonstrating Saga Pattern • Checkpoint Recovery • Multi-Agent Coordination</em>
 </p>
 
 <p align="center">
@@ -15,9 +15,9 @@
 
 ---
 
-## 🎯 Two Production Workflows
+## 🎯 Three Production Workflows
 
-This project demonstrates **two complete workflows** that solve different distributed system challenges:
+This project demonstrates **three complete workflows** that solve different distributed system challenges:
 
 ### 1. 🛍️ E-commerce Order Processing (Saga Pattern)
 **Problem**: Coordinating inventory, payment, and shipping with automatic compensation on failures
@@ -39,7 +39,19 @@ This project demonstrates **two complete workflows** that solve different distri
 - ✅ Cryptographic audit trail (Merkle roots for compliance)
 - ✅ Cost optimization (avoid re-running expensive compute)
 
-**Both workflows** showcase Temporal's durable execution, automatic retries, and complete observability.
+### 3. 🤖 Agent Codebase Analysis (Autonomous Agents)
+**Problem**: Long-running agent tasks that need crash recovery, budget tracking, and multi-agent coordination
+
+**Demonstrates**:
+- ✅ **Crash recovery**: Resume analysis from file N after worker restart
+- ✅ **Budget tracking**: Pause and request approval when budget exceeded
+- ✅ **Multi-agent coordination**: Child workflows for specialist agents
+- ✅ **Adaptive execution**: Switch strategies based on intermediate results
+- ✅ **Human-in-the-loop**: Approval gates for high-impact operations
+
+**Inspired by Anthropic's Claude Code** - patterns for autonomous agent infrastructure.
+
+**All three workflows** showcase Temporal's durable execution, automatic retries, and complete observability.
 
 ---
 
@@ -135,18 +147,19 @@ export async function orderWorkflow(order: OrderInput) {
 
 ### Core Temporal Features
 
-| Feature | E-commerce Demo | ML Training Demo | Value |
-|---------|-----------------|------------------|-------|
-| **Saga Pattern** | ✅ Automatic compensation | - | No manual rollback code |
-| **Checkpoint Recovery** | - | ✅ Resume from epoch N | Save expensive compute |
-| **Durable Execution** | ✅ Survives crashes | ✅ Survives crashes | 99.99% reliability |
-| **Automatic Retries** | ✅ Payment failures | ✅ Training failures | Handle transient issues |
-| **Human-in-the-Loop** | ✅ Order approval | ✅ Researcher decisions | Can pause for days |
-| **Signals** | ✅ Approval/cancellation | ✅ Adjust hyperparameters | React to external events |
-| **Queries** | ✅ Order status | ✅ Training progress | Inspect running workflows |
-| **Timers** | ✅ 7-day auto-complete | ✅ Checkpoint intervals | Long-running operations |
-| **Seeded Randomness** | - | ✅ Reproducible experiments | Research requirements |
-| **Cryptographic Audit** | - | ✅ Merkle roots | Compliance & lineage |
+| Feature | E-commerce | ML Training | Agent Analysis | Value |
+|---------|------------|-------------|----------------|-------|
+| **Saga Pattern** | ✅ Automatic compensation | - | ✅ Batch rollback | No manual rollback code |
+| **Checkpoint Recovery** | - | ✅ Resume from epoch N | ✅ Resume from file N | Save expensive compute |
+| **Durable Execution** | ✅ Survives crashes | ✅ Survives crashes | ✅ Survives crashes | 99.99% reliability |
+| **Automatic Retries** | ✅ Payment failures | ✅ Training failures | ✅ Analysis failures | Handle transient issues |
+| **Human-in-the-Loop** | ✅ Order approval | ✅ Researcher decisions | ✅ Plan/budget approval | Can pause for days |
+| **Signals** | ✅ Approval/cancel | ✅ Adjust parameters | ✅ Approve plan/budget | React to external events |
+| **Queries** | ✅ Order status | ✅ Training progress | ✅ Analysis progress | Inspect running workflows |
+| **Timers** | ✅ 7-day auto-complete | ✅ Checkpoint intervals | ✅ Adaptive delays | Long-running operations |
+| **Budget Tracking** | - | - | ✅ Cost control gates | Prevent runaway costs |
+| **Multi-Agent Coordination** | - | - | ✅ Child workflows | Parallel specialist agents |
+| **Adaptive Execution** | - | - | ✅ Strategy switching | Quality-driven decisions |
 
 ### Workflow 1: Order Processing Flow
 
@@ -220,6 +233,60 @@ flowchart TD
     style Save fill:#e6f3ff
     style Pause fill:#fff4e6
     style Resume fill:#ffe6e6
+```
+
+### Workflow 3: Agent Codebase Analysis Flow
+
+```mermaid
+flowchart TD
+    Start([🤖 Start Analysis]) --> FileLoop{More Files?}
+
+    FileLoop -->|Yes| Analyze[🔍 Analyze File<br/>Cached on Replay]
+    Analyze --> Budget{Budget<br/>Exceeded?}
+
+    Budget -->|Yes| PauseBudget[⏳ Request Budget<br/>Approval]
+    Budget -->|No| NextFile
+
+    PauseBudget --> BudgetDecision{Approved?}
+    BudgetDecision -->|Yes| NextFile
+    BudgetDecision -->|No| Cancel([❌ Cancelled])
+
+    NextFile --> Progress[📊 Emit Progress<br/>Fire-and-Forget]
+    Progress --> FileLoop
+
+    FileLoop -->|No| Plan[📋 Generate Refactor<br/>Plan]
+    Plan --> NeedApproval{Requires<br/>Approval?}
+
+    NeedApproval -->|Yes| PausePlan[⏳ Wait for Plan<br/>Approval - 24h]
+    NeedApproval -->|No| Refactor
+
+    PausePlan --> PlanDecision{Approved?}
+    PlanDecision -->|Yes| Refactor
+    PlanDecision -->|No| Cancel
+
+    Refactor --> BatchLoop{More Batches?}
+
+    BatchLoop -->|Yes| RefactorBatch[⚙️ Refactor Batch]
+    RefactorBatch --> Test[🧪 Run Tests]
+
+    Test --> TestResult{Tests<br/>Passed?}
+    TestResult -->|Yes| BatchLoop
+    TestResult -->|No| Rollback[↩️ Rollback Batch<br/>Compensation]
+
+    Rollback --> BatchLoop
+
+    BatchLoop -->|No| Complete([✅ Analysis Complete])
+
+    Analyze -.->|Crash| Resume[♻️ Resume from<br/>File N Not 0]
+    Resume --> FileLoop
+
+    style Start fill:#e1f5e1
+    style Complete fill:#e1f5e1
+    style Cancel fill:#ffe6e6
+    style PauseBudget fill:#fff4e6
+    style PausePlan fill:#fff4e6
+    style Rollback fill:#ffe6e6
+    style Resume fill:#e6f3ff
 ```
 
 ---
@@ -510,6 +577,134 @@ Open http://localhost:8233 and navigate to your workflow to see:
 - ✅ Researcher decision signals
 - ✅ Seeded random number generation (deterministic)
 
+### Testing Agent Codebase Analysis Workflow
+
+#### 1. Start a Codebase Analysis
+
+```bash
+curl -X POST http://localhost:3001/api/agent/analyze \
+  -H "Content-Type: application/json" \
+  -d @examples/codebase-analysis-config.json
+```
+
+**Response**:
+```json
+{
+  "taskId": "analysis-001",
+  "workflowId": "agent-analysis-analysis-001",
+  "runId": "abc123...",
+  "message": "Codebase analysis started",
+  "uiLink": "http://localhost:8233/namespaces/default/workflows/..."
+}
+```
+
+#### 2. Check Analysis Progress
+
+```bash
+# Replace <workflowId> with actual workflow ID from step 1
+curl http://localhost:3001/api/agent/analyze/<workflowId> | jq
+```
+
+**Response**:
+```json
+{
+  "taskId": "analysis-001",
+  "status": "analyzing",
+  "currentStage": "file-analysis",
+  "filesAnalyzed": 12,
+  "totalFiles": 20,
+  "costSoFar": 0.12,
+  "budgetRemaining": 4.88,
+  "issues": [
+    {
+      "severity": "high",
+      "type": "security-risk",
+      "message": "SQL injection vulnerability detected"
+    }
+  ]
+}
+```
+
+#### 3. Handle Budget Exceeded (if triggered)
+
+When cost exceeds budget, workflow pauses and requests approval:
+
+```bash
+curl -X POST http://localhost:3001/api/agent/analyze/<workflowId>/approve-budget \
+  -H "Content-Type: application/json" \
+  -d '{
+    "approved": true,
+    "newBudget": 10.0,
+    "reason": "High-priority security issues found"
+  }'
+```
+
+#### 4. Approve Refactor Plan (if requiresApproval: true)
+
+After analysis completes, workflow generates a refactor plan and waits for approval:
+
+```bash
+curl -X POST http://localhost:3001/api/agent/analyze/<workflowId>/approve-plan \
+  -H "Content-Type: application/json" \
+  -d '{
+    "approved": true,
+    "approvedBy": "senior-engineer@company.com",
+    "reason": "Plan looks good, proceed with refactoring"
+  }'
+```
+
+#### 5. Observe Crash Recovery
+
+**The Killer Feature** - Workflow resumes from last completed file:
+
+```bash
+# Start analysis of 20 files
+curl -X POST http://localhost:3001/api/agent/analyze -d @examples/codebase-analysis-config.json
+
+# Check progress - say it's at file 12/20
+curl http://localhost:3001/api/agent/analyze/<workflowId> | jq .filesAnalyzed
+# Output: 12
+
+# Kill worker (simulate crash)
+# Restart worker
+
+# Check progress again - resumes from file 13, NOT file 0!
+curl http://localhost:3001/api/agent/analyze/<workflowId> | jq .filesAnalyzed
+# Output: 13 (then 14, 15... continues from where it left off)
+```
+
+**KEY INSIGHT**: Temporal cached results for files 0-12. On replay, it uses those cached results and resumes from file 13. **No re-analysis, no wasted compute, seamless UX.**
+
+#### 6. Multi-Agent Coordination
+
+Start a workflow that coordinates multiple specialist agents:
+
+```bash
+curl -X POST http://localhost:3001/api/agent/multi-agent \
+  -H "Content-Type: application/json" \
+  -d '{
+    "projectName": "my-app",
+    "requirements": ["security", "performance", "maintainability"]
+  }'
+```
+
+This starts **three child workflows in parallel**:
+- Architecture analyzer
+- Security analyzer
+- Performance analyzer (only if architecture finds issues)
+
+Each child workflow has its own history. If security analyzer fails, architecture analyzer doesn't re-run.
+
+#### 7. View Agent Workflow in Temporal UI
+
+Open http://localhost:8233 and navigate to your workflow to see:
+- ✅ Real-time file-by-file analysis progress
+- ✅ Budget tracking with approval gates
+- ✅ Crash recovery (replay shows cached file results)
+- ✅ Plan approval waiting state
+- ✅ Batch refactoring with compensation on test failures
+- ✅ Multi-agent coordination (parent → child workflows)
+
 ---
 
 ## 📖 Project Structure
@@ -518,34 +713,37 @@ Open http://localhost:8233 and navigate to your workflow to see:
 temporal-ecommerce/
 ├── src/
 │   ├── workflows/
-│   │   ├── index.ts                # Workflow exports
-│   │   ├── order-workflow.ts       # Order workflow (Saga pattern)
-│   │   └── ml-training-workflow.ts # ML training (Checkpoint recovery)
+│   │   ├── index.ts                    # Workflow exports
+│   │   ├── order-workflow.ts           # Order workflow (Saga pattern)
+│   │   ├── ml-training-workflow.ts     # ML training (Checkpoint recovery)
+│   │   └── agent-codebase-workflow.ts  # Agent analysis (Multi-agent, crash recovery)
 │   ├── activities/
-│   │   ├── index.ts                # Activity exports
-│   │   ├── inventory.ts            # Inventory operations + compensation
-│   │   ├── payment.ts              # Payment processing + refunds
-│   │   ├── shipping.ts             # Shipment creation + cancellation
-│   │   └── ml-training.ts          # Training activities + checkpoints
+│   │   ├── index.ts                    # Activity exports
+│   │   ├── inventory.ts                # Inventory operations + compensation
+│   │   ├── payment.ts                  # Payment processing + refunds
+│   │   ├── shipping.ts                 # Shipment creation + cancellation
+│   │   ├── ml-training.ts              # Training activities + checkpoints
+│   │   └── agent-codebase.ts           # Agent activities (analyze, refactor, budget)
 │   ├── api/
-│   │   └── server.ts               # REST API (Express) - both workflows
+│   │   └── server.ts                   # REST API (Express) - all three workflows
 │   ├── utils/
-│   │   └── logger.ts               # Winston logger
-│   ├── types.ts                    # TypeScript types
-│   └── worker.ts                   # Temporal worker (dual task queues)
+│   │   └── logger.ts                   # Winston logger
+│   ├── types.ts                        # TypeScript types
+│   └── worker.ts                       # Temporal worker (three task queues)
 ├── tests/
 │   └── integration/
-│       └── order-workflow.test.ts  # Workflow integration tests
+│       └── order-workflow.test.ts      # Workflow integration tests
 ├── examples/
-│   ├── order1.json                 # Normal order example
-│   ├── order-high-value.json       # High-value order example
-│   └── ml-training-config.json     # ML training config example
-├── docs/                           # Additional documentation
-│   ├── SAGA_PATTERN.md             # Deep dive on Saga pattern
-│   ├── ANTHROPIC_ALIGNMENT.md      # Anthropic interview alignment
-│   └── INTERVIEW_GUIDE.md          # Interview scenarios & demos
-├── docker-compose.yml              # Temporal server setup
-├── test-system.sh                  # Automated system test
+│   ├── order1.json                     # Normal order example
+│   ├── order-high-value.json           # High-value order example
+│   ├── ml-training-config.json         # ML training config example
+│   └── codebase-analysis-config.json   # Agent analysis config example
+├── docs/                               # Additional documentation
+│   ├── SAGA_PATTERN.md                 # Deep dive on Saga pattern
+│   ├── ANTHROPIC_ALIGNMENT.md          # Anthropic interview alignment
+│   └── INTERVIEW_GUIDE.md              # Interview scenarios & demos
+├── docker-compose.yml                  # Temporal server setup
+├── test-system.sh                      # Automated system test (all 3 workflows)
 └── package.json
 ```
 
@@ -997,5 +1195,12 @@ MIT License - see [LICENSE](./LICENSE) for details.
 11. **Activity result caching is free optimization** - Temporal never re-runs successful activities
 12. **Cryptographic audit trails** - Merkle roots provide tamper-evident model lineage
 13. **Human-in-the-loop is first-class** - Workflows can wait days for researcher decisions
+
+### Agent Workflow Insights
+14. **Crash recovery is the killer feature** - Resume from file N after worker restart, not file 0
+15. **Budget tracking prevents runaway costs** - Pause and request approval when budget exceeded
+16. **Multi-agent coordination via child workflows** - Specialist agents run in parallel, failures isolated
+17. **Adaptive execution enables quality-driven decisions** - Switch strategies based on intermediate results
+18. **Fire-and-forget progress updates** - Real-time UI without breaking workflow determinism
 
 **Build once with Temporal, run reliably forever.**

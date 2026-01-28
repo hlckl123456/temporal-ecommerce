@@ -157,6 +157,44 @@ test_ml_training() {
     echo "$TRAINING_RESPONSE" | python3 -m json.tool 2>/dev/null || echo "$TRAINING_RESPONSE"
 }
 
+# Test 4: Start agent codebase analysis workflow
+test_agent_analysis() {
+    echo ""
+    echo "Test 4: Starting agent codebase analysis workflow..."
+
+    RESPONSE=$(curl -s -X POST "$API_URL/api/agent/analyze" \
+        -H "Content-Type: application/json" \
+        -d @examples/codebase-analysis-config.json)
+
+    WORKFLOW_ID=$(echo "$RESPONSE" | grep -o '"workflowId":"[^"]*"' | cut -d'"' -f4)
+
+    if [ -z "$WORKFLOW_ID" ]; then
+        echo -e "${RED}✗ Failed to start agent analysis${NC}"
+        echo "$RESPONSE"
+        return 1
+    fi
+
+    echo -e "${GREEN}✓ Agent analysis started: $WORKFLOW_ID${NC}"
+
+    # Wait for some analysis progress
+    echo "Waiting for analysis to progress..."
+    sleep 5
+
+    # Check analysis status
+    echo "Checking analysis progress..."
+    ANALYSIS_RESPONSE=$(curl -s "$API_URL/api/agent/analyze/$WORKFLOW_ID")
+    STATUS=$(echo "$ANALYSIS_RESPONSE" | grep -o '"status":"[^"]*"' | cut -d'"' -f4)
+    FILES_ANALYZED=$(echo "$ANALYSIS_RESPONSE" | grep -o '"filesAnalyzed":[0-9]*' | cut -d':' -f2)
+    TOTAL_FILES=$(echo "$ANALYSIS_RESPONSE" | grep -o '"totalFiles":[0-9]*' | cut -d':' -f2)
+    COST=$(echo "$ANALYSIS_RESPONSE" | grep -o '"costSoFar":[0-9.]*' | cut -d':' -f2)
+
+    echo -e "${GREEN}✓ Analysis status: $STATUS${NC}"
+    echo -e "${GREEN}✓ Files analyzed: $FILES_ANALYZED/$TOTAL_FILES${NC}"
+    echo -e "${GREEN}✓ Cost so far: \$$COST${NC}"
+
+    echo "$ANALYSIS_RESPONSE" | python3 -m json.tool 2>/dev/null || echo "$ANALYSIS_RESPONSE"
+}
+
 # Main test execution
 main() {
     echo "Checking services..."
@@ -171,6 +209,10 @@ main() {
     echo ""
     echo "=== ML TRAINING WORKFLOW TESTS ==="
     test_ml_training
+
+    echo ""
+    echo "=== AGENT CODEBASE ANALYSIS TESTS ==="
+    test_agent_analysis
 
     echo ""
     echo "================================================"
@@ -191,6 +233,12 @@ main() {
     echo "   - Start training: curl -X POST $API_URL/api/ml-training -H 'Content-Type: application/json' -d @examples/ml-training-config.json"
     echo "   - Get progress:   curl $API_URL/api/ml-training/<workflowId>"
     echo "   - Continue:       curl -X POST $API_URL/api/ml-training/<workflowId>/decision -H 'Content-Type: application/json' -d '{\"action\": \"continue\"}'"
+    echo ""
+    echo "Agent Codebase Analysis:"
+    echo "   - Start analysis: curl -X POST $API_URL/api/agent/analyze -H 'Content-Type: application/json' -d @examples/codebase-analysis-config.json"
+    echo "   - Get progress:   curl $API_URL/api/agent/analyze/<workflowId>"
+    echo "   - Approve plan:   curl -X POST $API_URL/api/agent/analyze/<workflowId>/approve-plan -H 'Content-Type: application/json' -d '{\"approved\": true, \"approvedBy\": \"engineer\"}'"
+    echo "   - Approve budget: curl -X POST $API_URL/api/agent/analyze/<workflowId>/approve-budget -H 'Content-Type: application/json' -d '{\"approved\": true, \"newBudget\": 10.0}'"
     echo ""
 }
 

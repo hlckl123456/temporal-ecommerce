@@ -2,7 +2,10 @@
  * Temporal Worker
  *
  * Workers execute workflows and activities.
- * This worker handles BOTH order processing and ML training workflows.
+ * This worker handles THREE types of workflows:
+ * - Order Processing (e-commerce with Saga pattern)
+ * - ML Training (checkpoint recovery)
+ * - Agent Tasks (autonomous codebase analysis with multi-agent coordination)
  *
  * You can run multiple workers for:
  * - High availability
@@ -45,14 +48,29 @@ async function run() {
       maxConcurrentWorkflowTaskExecutions: 5,
     });
 
+    // Create worker for agent tasks (autonomous codebase analysis)
+    const agentWorker = await Worker.create({
+      connection,
+      namespace: 'default',
+      taskQueue: 'agent-tasks',
+      workflowsPath: require.resolve('./workflows'),
+      activities,
+      maxConcurrentActivityTaskExecutions: 8, // Agent activities are moderately intensive
+      maxConcurrentWorkflowTaskExecutions: 8,
+    });
+
     logger.info('Workers created successfully');
-    logger.info('Task queues: order-processing, ml-training');
+    logger.info('Task queues:');
+    logger.info('  - order-processing (Saga pattern, e-commerce)');
+    logger.info('  - ml-training (Checkpoint recovery, ML workflows)');
+    logger.info('  - agent-tasks (Autonomous agents, multi-agent coordination)');
     logger.info('Starting workers...');
 
-    // Run both workers concurrently
+    // Run all three workers concurrently
     await Promise.all([
       orderWorker.run(),
       mlWorker.run(),
+      agentWorker.run(),
     ]);
   } catch (error) {
     logger.error('Worker failed', { error });

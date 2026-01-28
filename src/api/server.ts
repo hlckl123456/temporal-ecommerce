@@ -13,6 +13,17 @@ import cors from 'cors';
 import { Connection, Client } from '@temporalio/client';
 import { orderWorkflow, approveOrderSignal, cancelOrderSignal, orderStateQuery } from '../workflows/order-workflow';
 import { mlTrainingWorkflow, researcherDecisionSignal, trainingStateQuery, type TrainingConfig, type ResearcherDecision } from '../workflows/ml-training-workflow';
+import {
+  codebaseAnalysisWorkflow,
+  multiAgentCodebaseWorkflow,
+  adaptiveAnalysisWorkflow,
+  approveRefactorPlanSignal,
+  approveBudgetSignal,
+  analysisStateQuery,
+  type CodebaseAnalysisTask,
+  type ApprovalDecision as RefactorApprovalDecision,
+  type BudgetApproval
+} from '../workflows/agent-codebase-workflow';
 import type { OrderInput, ApprovalDecision } from '../types';
 import { logger } from '../utils/logger';
 
@@ -329,6 +340,203 @@ app.post('/api/ml-training/:workflowId/decision', async (req, res) => {
   }
 });
 
+// ==================== AGENT CODEBASE ANALYSIS ENDPOINTS ====================
+
+/**
+ * Start agent codebase analysis
+ * Demonstrates: Crash recovery, budget tracking, human-in-the-loop
+ */
+app.post('/api/agent/analyze', async (req, res) => {
+  try {
+    const task: CodebaseAnalysisTask = req.body;
+
+    // Validate input
+    if (!task.taskId || !task.repositoryPath || !task.files || task.files.length === 0) {
+      return res.status(400).json({
+        error: 'Invalid analysis task',
+        required: ['taskId', 'repositoryPath', 'files'],
+      });
+    }
+
+    logger.info(`Starting codebase analysis`, {
+      taskId: task.taskId,
+      files: task.files.length,
+      budget: task.budget
+    });
+
+    // Start workflow
+    const handle = await temporalClient.workflow.start(codebaseAnalysisWorkflow, {
+      taskQueue: 'agent-tasks',
+      workflowId: `agent-analysis-${task.taskId}`,
+      args: [task],
+    });
+
+    logger.info(`Agent analysis workflow started`, {
+      workflowId: handle.workflowId,
+      runId: handle.firstExecutionRunId
+    });
+
+    res.status(201).json({
+      taskId: task.taskId,
+      workflowId: handle.workflowId,
+      runId: handle.firstExecutionRunId,
+      message: 'Codebase analysis started',
+      uiLink: `http://localhost:8233/namespaces/default/workflows/${handle.workflowId}/${handle.firstExecutionRunId}`,
+    });
+  } catch (error) {
+    logger.error('Failed to start agent analysis', { error });
+    res.status(500).json({
+      error: 'Failed to start analysis',
+      details: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
+
+/**
+ * Get agent analysis status
+ */
+app.get('/api/agent/analyze/:workflowId', async (req, res) => {
+  try {
+    const { workflowId } = req.params;
+
+    const handle = temporalClient.workflow.getHandle(workflowId);
+
+    // Query workflow state
+    const state = await handle.query(analysisStateQuery);
+
+    logger.info(`Retrieved analysis state`, { workflowId, status: state.status });
+
+    res.json({
+      ...state,
+      workflowId,
+      uiLink: `http://localhost:8233/namespaces/default/workflows/${workflowId}`,
+    });
+  } catch (error) {
+    logger.error('Failed to get analysis status', { error, workflowId: req.params.workflowId });
+    res.status(404).json({
+      error: 'Analysis workflow not found or not running',
+      details: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
+
+/**
+ * Approve refactor plan
+ */
+app.post('/api/agent/analyze/:workflowId/approve-plan', async (req, res) => {
+  try {
+    const { workflowId } = req.params;
+    const { approved, approvedBy, reason } = req.body;
+
+    if (typeof approved !== 'boolean') {
+      return res.status(400).json({
+        error: 'Invalid input',
+        required: ['approved (boolean)'],
+      });
+    }
+
+    const handle = temporalClient.workflow.getHandle(workflowId);
+
+    const decision: RefactorApprovalDecision = {
+      approved,
+      approvedBy,
+      reason,
+    };
+
+    await handle.signal(approveRefactorPlanSignal, decision);
+
+    logger.info(`Refactor plan decision sent`, { workflowId, approved });
+
+    res.json({
+      message: approved ? 'Refactor plan approved' : 'Refactor plan rejected',
+      decision,
+    });
+  } catch (error) {
+    logger.error('Failed to send plan approval', { error, workflowId: req.params.workflowId });
+    res.status(500).json({
+      error: 'Failed to send plan approval',
+      details: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
+
+/**
+ * Approve budget increase
+ */
+app.post('/api/agent/analyze/:workflowId/approve-budget', async (req, res) => {
+  try {
+    const { workflowId } = req.params;
+    const { approved, newBudget, reason } = req.body;
+
+    if (typeof approved !== 'boolean') {
+      return res.status(400).json({
+        error: 'Invalid input',
+        required: ['approved (boolean)'],
+      });
+    }
+
+    const handle = temporalClient.workflow.getHandle(workflowId);
+
+    const approval: BudgetApproval = {
+      approved,
+      newBudget,
+      reason,
+    };
+
+    await handle.signal(approveBudgetSignal, approval);
+
+    logger.info(`Budget approval sent`, { workflowId, approved, newBudget });
+
+    res.json({
+      message: approved ? 'Budget increase approved' : 'Budget increase rejected',
+      approval,
+    });
+  } catch (error) {
+    logger.error('Failed to send budget approval', { error, workflowId: req.params.workflowId });
+    res.status(500).json({
+      error: 'Failed to send budget approval',
+      details: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
+
+/**
+ * Start multi-agent coordination workflow
+ */
+app.post('/api/agent/multi-agent', async (req, res) => {
+  try {
+    const { projectName, requirements } = req.body;
+
+    if (!projectName || !requirements) {
+      return res.status(400).json({
+        error: 'Invalid input',
+        required: ['projectName', 'requirements'],
+      });
+    }
+
+    logger.info(`Starting multi-agent workflow`, { projectName });
+
+    const handle = await temporalClient.workflow.start(multiAgentCodebaseWorkflow, {
+      taskQueue: 'agent-tasks',
+      workflowId: `multi-agent-${projectName}-${Date.now()}`,
+      args: [{ projectName, requirements }],
+    });
+
+    res.status(201).json({
+      projectName,
+      workflowId: handle.workflowId,
+      message: 'Multi-agent workflow started',
+      uiLink: `http://localhost:8233/namespaces/default/workflows/${handle.workflowId}`,
+    });
+  } catch (error) {
+    logger.error('Failed to start multi-agent workflow', { error });
+    res.status(500).json({
+      error: 'Failed to start multi-agent workflow',
+      details: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
+
 // Start server
 async function start() {
   try {
@@ -349,6 +557,11 @@ async function start() {
       logger.info(`  Start training: curl -X POST http://localhost:${port}/api/ml-training -H "Content-Type: application/json" -d @examples/ml-training-config.json`);
       logger.info(`  Get progress:   curl http://localhost:${port}/api/ml-training/ml-training-<workflowId>`);
       logger.info(`  Continue:       curl -X POST http://localhost:${port}/api/ml-training/<workflowId>/decision -H "Content-Type: application/json" -d '{"action": "continue"}'`);
+      logger.info('');
+      logger.info('Agent Codebase Analysis:');
+      logger.info(`  Start analysis: curl -X POST http://localhost:${port}/api/agent/analyze -H "Content-Type: application/json" -d @examples/codebase-analysis-config.json`);
+      logger.info(`  Get progress:   curl http://localhost:${port}/api/agent/analyze/<workflowId>`);
+      logger.info(`  Approve plan:   curl -X POST http://localhost:${port}/api/agent/analyze/<workflowId>/approve-plan -H "Content-Type: application/json" -d '{"approved": true, "approvedBy": "engineer"}'`);
     });
   } catch (error) {
     logger.error('Failed to start server', { error });

@@ -1,0 +1,30 @@
+{
+  "taskId": "analysis-001",
+  "repositoryPath": "/projects/my-typescript-app",
+  "files": [
+    "src/components/Header.tsx",
+    "src/components/Footer.tsx",
+    "src/utils/api.ts",
+    "src/utils/validation.ts",
+    "src/services/auth.ts",
+    "src/services/analytics.ts",
+    "src/hooks/useUser.ts",
+    "src/hooks/useTheme.ts",
+    "src/pages/Home.tsx",
+    "src/pages/Dashboard.tsx",
+    "src/pages/Settings.tsx",
+    "src/lib/database.ts",
+    "src/lib/cache.ts",
+    "src/lib/logger.ts",
+    "src/config/constants.ts",
+    "src/config/routes.ts",
+    "src/types/user.ts",
+    "src/types/api.ts",
+    "src/models/User.ts",
+    "src/models/Product.ts"
+  ],
+  "analysisType": "architectural",
+  "targetImprovement": "maintainability",
+  "budget": 5.0,
+  "requiresApproval": true
+}
