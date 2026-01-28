@@ -2,6 +2,8 @@
  * Temporal Worker
  *
  * Workers execute workflows and activities.
+ * This worker handles BOTH order processing and ML training workflows.
+ *
  * You can run multiple workers for:
  * - High availability
  * - Load distribution
@@ -21,23 +23,37 @@ async function run() {
 
     logger.info('Connected to Temporal server');
 
-    // Create worker
-    const worker = await Worker.create({
+    // Create worker for order processing
+    const orderWorker = await Worker.create({
       connection,
       namespace: 'default',
       taskQueue: 'order-processing',
-      workflowsPath: require.resolve('./workflows/order-workflow'),
+      workflowsPath: require.resolve('./workflows'),
       activities,
       maxConcurrentActivityTaskExecutions: 10,
       maxConcurrentWorkflowTaskExecutions: 10,
     });
 
-    logger.info('Worker created successfully');
-    logger.info('Task queue: order-processing');
-    logger.info('Starting worker...');
+    // Create worker for ML training
+    const mlWorker = await Worker.create({
+      connection,
+      namespace: 'default',
+      taskQueue: 'ml-training',
+      workflowsPath: require.resolve('./workflows'),
+      activities,
+      maxConcurrentActivityTaskExecutions: 5, // ML activities are more resource-intensive
+      maxConcurrentWorkflowTaskExecutions: 5,
+    });
 
-    // Start worker
-    await worker.run();
+    logger.info('Workers created successfully');
+    logger.info('Task queues: order-processing, ml-training');
+    logger.info('Starting workers...');
+
+    // Run both workers concurrently
+    await Promise.all([
+      orderWorker.run(),
+      mlWorker.run(),
+    ]);
   } catch (error) {
     logger.error('Worker failed', { error });
     process.exit(1);

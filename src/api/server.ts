@@ -12,6 +12,7 @@ import express from 'express';
 import cors from 'cors';
 import { Connection, Client } from '@temporalio/client';
 import { orderWorkflow, approveOrderSignal, cancelOrderSignal, orderStateQuery } from '../workflows/order-workflow';
+import { mlTrainingWorkflow, researcherDecisionSignal, trainingStateQuery, type TrainingConfig, type ResearcherDecision } from '../workflows/ml-training-workflow';
 import type { OrderInput, ApprovalDecision } from '../types';
 import { logger } from '../utils/logger';
 
@@ -213,6 +214,121 @@ app.get('/api/orders', async (req, res) => {
   }
 });
 
+// ==================== ML TRAINING ENDPOINTS ====================
+
+/**
+ * Start a new ML training job
+ * Starts a new ML training workflow
+ */
+app.post('/api/ml-training', async (req, res) => {
+  try {
+    const config: TrainingConfig = req.body;
+
+    // Validate input
+    if (!config.modelId || !config.datasetId || !config.hyperparameters) {
+      return res.status(400).json({
+        error: 'Invalid training config',
+        required: ['modelId', 'datasetId', 'hyperparameters'],
+      });
+    }
+
+    logger.info(`Starting ML training`, { modelId: config.modelId, datasetId: config.datasetId });
+
+    // Start workflow
+    const handle = await temporalClient.workflow.start(mlTrainingWorkflow, {
+      taskQueue: 'ml-training',
+      workflowId: `ml-training-${config.modelId}-${Date.now()}`,
+      args: [config],
+    });
+
+    logger.info(`ML training workflow started`, { workflowId: handle.workflowId, runId: handle.firstExecutionRunId });
+
+    res.status(201).json({
+      modelId: config.modelId,
+      workflowId: handle.workflowId,
+      runId: handle.firstExecutionRunId,
+      message: 'ML training started successfully',
+      uiLink: `http://localhost:8233/namespaces/default/workflows/${handle.workflowId}/${handle.firstExecutionRunId}`,
+    });
+  } catch (error) {
+    logger.error('Failed to start ML training', { error });
+    res.status(500).json({
+      error: 'Failed to start ML training',
+      details: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
+
+/**
+ * Get ML training status
+ * Queries workflow state without modifying it
+ */
+app.get('/api/ml-training/:workflowId', async (req, res) => {
+  try {
+    const { workflowId } = req.params;
+
+    const handle = temporalClient.workflow.getHandle(workflowId);
+
+    // Query workflow state
+    const state = await handle.query(trainingStateQuery);
+
+    logger.info(`Retrieved training state`, { workflowId, status: state.status });
+
+    res.json({
+      ...state,
+      workflowId,
+      uiLink: `http://localhost:8233/namespaces/default/workflows/${workflowId}`,
+    });
+  } catch (error) {
+    logger.error('Failed to get training status', { error, workflowId: req.params.workflowId });
+    res.status(404).json({
+      error: 'Training workflow not found or not running',
+      details: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
+
+/**
+ * Send researcher decision
+ * Allows researcher to continue, adjust, or stop training
+ */
+app.post('/api/ml-training/:workflowId/decision', async (req, res) => {
+  try {
+    const { workflowId } = req.params;
+    const { action, reason, newHyperparameters } = req.body;
+
+    if (!action || !['continue', 'adjust', 'stop'].includes(action)) {
+      return res.status(400).json({
+        error: 'Invalid input',
+        required: ['action (continue|adjust|stop)'],
+      });
+    }
+
+    const handle = temporalClient.workflow.getHandle(workflowId);
+
+    const decision: ResearcherDecision = {
+      action,
+      reason,
+      newHyperparameters,
+    };
+
+    await handle.signal(researcherDecisionSignal, decision);
+
+    logger.info(`Researcher decision sent`, { workflowId, action });
+
+    res.json({
+      message: `Training ${action} decision sent`,
+      decision,
+    });
+  } catch (error) {
+    logger.error('Failed to send researcher decision', { error, workflowId: req.params.workflowId });
+    res.status(500).json({
+      error: 'Failed to send researcher decision',
+      details: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
+
 // Start server
 async function start() {
   try {
@@ -223,9 +339,16 @@ async function start() {
       logger.info('Temporal UI: http://localhost:8233');
       logger.info('');
       logger.info('Example API calls:');
+      logger.info('');
+      logger.info('Order Processing:');
       logger.info(`  Create order: curl -X POST http://localhost:${port}/api/orders -H "Content-Type: application/json" -d @examples/order1.json`);
-      logger.info(`  Get status:   curl http://localhost:${port}/api/orders/order-123`);
-      logger.info(`  Approve:      curl -X POST http://localhost:${port}/api/orders/order-123/approve -H "Content-Type: application/json" -d '{"approved": true, "approvedBy": "admin"}'`);
+      logger.info(`  Get status:   curl http://localhost:${port}/api/orders/order-001`);
+      logger.info(`  Approve:      curl -X POST http://localhost:${port}/api/orders/order-001/approve -H "Content-Type: application/json" -d '{"approved": true, "approvedBy": "admin"}'`);
+      logger.info('');
+      logger.info('ML Training:');
+      logger.info(`  Start training: curl -X POST http://localhost:${port}/api/ml-training -H "Content-Type: application/json" -d @examples/ml-training-config.json`);
+      logger.info(`  Get progress:   curl http://localhost:${port}/api/ml-training/ml-training-<workflowId>`);
+      logger.info(`  Continue:       curl -X POST http://localhost:${port}/api/ml-training/<workflowId>/decision -H "Content-Type: application/json" -d '{"action": "continue"}'`);
     });
   } catch (error) {
     logger.error('Failed to start server', { error });

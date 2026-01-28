@@ -1,13 +1,15 @@
 #!/bin/bash
 
 # System Integration Test Script
-# Tests the complete Temporal e-commerce system
+# Tests the complete Temporal workflow orchestration system
+# - E-commerce Order Processing (Saga Pattern)
+# - ML Model Training (Checkpoint Recovery)
 
 set -e
 
-echo "=================================="
-echo "Temporal E-commerce System Test"
-echo "=================================="
+echo "================================================"
+echo "Temporal Workflow Orchestration System Test"
+echo "================================================"
 echo ""
 
 # Colors for output
@@ -118,27 +120,77 @@ test_high_value_order() {
     fi
 }
 
+# Test 3: Start ML training workflow
+test_ml_training() {
+    echo ""
+    echo "Test 3: Starting ML training workflow..."
+
+    RESPONSE=$(curl -s -X POST "$API_URL/api/ml-training" \
+        -H "Content-Type: application/json" \
+        -d @examples/ml-training-config.json)
+
+    WORKFLOW_ID=$(echo "$RESPONSE" | grep -o '"workflowId":"[^"]*"' | cut -d'"' -f4)
+
+    if [ -z "$WORKFLOW_ID" ]; then
+        echo -e "${RED}✗ Failed to start ML training${NC}"
+        echo "$RESPONSE"
+        return 1
+    fi
+
+    echo -e "${GREEN}✓ ML training started: $WORKFLOW_ID${NC}"
+
+    # Wait for some training progress
+    echo "Waiting for training to progress..."
+    sleep 5
+
+    # Check training status
+    echo "Checking training progress..."
+    TRAINING_RESPONSE=$(curl -s "$API_URL/api/ml-training/$WORKFLOW_ID")
+    STATUS=$(echo "$TRAINING_RESPONSE" | grep -o '"status":"[^"]*"' | cut -d'"' -f4)
+    EPOCH=$(echo "$TRAINING_RESPONSE" | grep -o '"currentEpoch":[0-9]*' | cut -d':' -f2)
+    LOSS=$(echo "$TRAINING_RESPONSE" | grep -o '"currentLoss":[0-9.]*' | cut -d':' -f2)
+
+    echo -e "${GREEN}✓ Training status: $STATUS${NC}"
+    echo -e "${GREEN}✓ Current epoch: $EPOCH${NC}"
+    echo -e "${GREEN}✓ Current loss: $LOSS${NC}"
+
+    echo "$TRAINING_RESPONSE" | python3 -m json.tool 2>/dev/null || echo "$TRAINING_RESPONSE"
+}
+
 # Main test execution
 main() {
     echo "Checking services..."
     check_service "$API_URL/health" "API Server" || exit 1
     check_service "http://localhost:8233" "Temporal UI" || exit 1
 
+    echo ""
+    echo "=== E-COMMERCE WORKFLOW TESTS ==="
     test_normal_order
     test_high_value_order
 
     echo ""
-    echo "=================================="
-    echo -e "${GREEN}All tests completed!${NC}"
-    echo "=================================="
+    echo "=== ML TRAINING WORKFLOW TESTS ==="
+    test_ml_training
+
+    echo ""
+    echo "================================================"
+    echo -e "${GREEN}All tests completed successfully!${NC}"
+    echo "================================================"
     echo ""
     echo "Next steps:"
     echo "1. View workflows in Temporal UI: http://localhost:8233"
     echo "2. Check the comprehensive logs in worker terminal"
     echo "3. Try more examples:"
+    echo ""
+    echo "Order Processing:"
     echo "   - Create order: curl -X POST $API_URL/api/orders -H 'Content-Type: application/json' -d @examples/order1.json"
     echo "   - Get status:   curl $API_URL/api/orders/order-001"
     echo "   - Approve:      curl -X POST $API_URL/api/orders/order-002-hv/approve -H 'Content-Type: application/json' -d '{\"approved\": true, \"approvedBy\": \"admin\"}'"
+    echo ""
+    echo "ML Training:"
+    echo "   - Start training: curl -X POST $API_URL/api/ml-training -H 'Content-Type: application/json' -d @examples/ml-training-config.json"
+    echo "   - Get progress:   curl $API_URL/api/ml-training/<workflowId>"
+    echo "   - Continue:       curl -X POST $API_URL/api/ml-training/<workflowId>/decision -H 'Content-Type: application/json' -d '{\"action\": \"continue\"}'"
     echo ""
 }
 

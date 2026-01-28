@@ -1,7 +1,8 @@
-# 🛍️ Temporal E-commerce: Production-Grade Order Processing
+# 🛍️ Temporal E-commerce: Production-Grade Workflow Orchestration
 
 <p align="center">
-  <strong>Solving distributed transaction complexity with Temporal's durable execution engine</strong>
+  <strong>Solving distributed transaction complexity with Temporal's durable execution engine</strong><br/>
+  <em>Demonstrating Saga Pattern (E-commerce) + ML Training Workflows (Checkpoint Recovery)</em>
 </p>
 
 <p align="center">
@@ -11,6 +12,34 @@
   <img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License">
   <img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg" alt="PRs Welcome">
 </p>
+
+---
+
+## 🎯 Two Production Workflows
+
+This project demonstrates **two complete workflows** that solve different distributed system challenges:
+
+### 1. 🛍️ E-commerce Order Processing (Saga Pattern)
+**Problem**: Coordinating inventory, payment, and shipping with automatic compensation on failures
+
+**Demonstrates**:
+- ✅ Saga pattern for distributed transactions
+- ✅ Automatic compensation (rollback) in reverse order
+- ✅ Human-in-the-loop approval for high-value orders
+- ✅ Long-running processes (7-day auto-complete)
+- ✅ Signals for external events (approval, cancellation)
+
+### 2. 🤖 ML Model Training (Checkpoint Recovery)
+**Problem**: $100K+ training runs that crash and need to resume without starting over
+
+**Demonstrates**:
+- ✅ Checkpoint-based partial replay (resume from epoch N)
+- ✅ Seeded randomness for reproducible experiments
+- ✅ Researcher intervention (pause, adjust, resume)
+- ✅ Cryptographic audit trail (Merkle roots for compliance)
+- ✅ Cost optimization (avoid re-running expensive compute)
+
+**Both workflows** showcase Temporal's durable execution, automatic retries, and complete observability.
 
 ---
 
@@ -106,18 +135,20 @@ export async function orderWorkflow(order: OrderInput) {
 
 ### Core Temporal Features
 
-| Feature | Demonstration | Value |
-|---------|---------------|-------|
-| **Saga Pattern** | Automatic compensation on failures | No manual rollback code |
-| **Durable Execution** | Process survives restarts | 99.99% reliability |
-| **Automatic Retries** | Payment failures retry automatically | Handle transient issues |
-| **Human-in-the-Loop** | High-value orders wait for approval | Can pause for days |
-| **Signals** | External approval/cancellation | React to external events |
-| **Queries** | Real-time order status | Inspect running workflows |
-| **Timers** | Auto-complete after 7 days | Long-running operations |
-| **Versioning** | Deploy code without breaking running workflows | Zero-downtime updates |
+| Feature | E-commerce Demo | ML Training Demo | Value |
+|---------|-----------------|------------------|-------|
+| **Saga Pattern** | ✅ Automatic compensation | - | No manual rollback code |
+| **Checkpoint Recovery** | - | ✅ Resume from epoch N | Save expensive compute |
+| **Durable Execution** | ✅ Survives crashes | ✅ Survives crashes | 99.99% reliability |
+| **Automatic Retries** | ✅ Payment failures | ✅ Training failures | Handle transient issues |
+| **Human-in-the-Loop** | ✅ Order approval | ✅ Researcher decisions | Can pause for days |
+| **Signals** | ✅ Approval/cancellation | ✅ Adjust hyperparameters | React to external events |
+| **Queries** | ✅ Order status | ✅ Training progress | Inspect running workflows |
+| **Timers** | ✅ 7-day auto-complete | ✅ Checkpoint intervals | Long-running operations |
+| **Seeded Randomness** | - | ✅ Reproducible experiments | Research requirements |
+| **Cryptographic Audit** | - | ✅ Merkle roots | Compliance & lineage |
 
-### Order Processing Flow
+### Workflow 1: Order Processing Flow
 
 ```mermaid
 flowchart TD
@@ -150,6 +181,45 @@ flowchart TD
     style Compensate fill:#ffe6e6
     style Failed fill:#ffe6e6
     style Approval fill:#fff4e6
+```
+
+### Workflow 2: ML Training Flow
+
+```mermaid
+flowchart TD
+    Start([🚀 Start Training]) --> Init[⚙️ Initialize<br/>Load Dataset + Model]
+    Init --> Seed[🎲 Setup Seeded RNG<br/>For Reproducibility]
+    Seed --> Loop{More Epochs?}
+
+    Loop -->|Yes| Train[🤖 Train Epoch<br/>Using Seeded Shuffle]
+    Train --> Check{Checkpoint<br/>Interval?}
+
+    Check -->|Yes| Save[💾 Save Checkpoint<br/>+ Merkle Root]
+    Check -->|No| Review
+
+    Save --> Review{Review<br/>Interval?}
+
+    Review -->|Yes| Pause[⏳ Await Researcher<br/>Decision]
+    Review -->|No| Loop
+
+    Pause --> Decision{Decision?}
+    Decision -->|Continue| Loop
+    Decision -->|Adjust| Adjust[⚙️ Update Hyperparameters]
+    Decision -->|Stop| Eval
+    Adjust --> Loop
+
+    Loop -->|No| Eval[📊 Evaluate Model]
+    Eval --> Complete([✅ Training Complete])
+
+    Init -.->|Fail| Failed([❌ Failed])
+    Train -.->|Fail| Resume[♻️ Resume from<br/>Last Checkpoint]
+    Resume --> Loop
+
+    style Start fill:#e1f5e1
+    style Complete fill:#e1f5e1
+    style Save fill:#e6f3ff
+    style Pause fill:#fff4e6
+    style Resume fill:#ffe6e6
 ```
 
 ---
@@ -346,6 +416,100 @@ curl -X POST http://localhost:3001/api/orders/order-001/cancel
 curl http://localhost:3001/api/orders/order-001 | jq
 ```
 
+### Testing ML Training Workflow
+
+#### 1. Start a Training Job
+
+```bash
+curl -X POST http://localhost:3001/api/ml-training \
+  -H "Content-Type: application/json" \
+  -d @examples/ml-training-config.json
+```
+
+**Response**:
+```json
+{
+  "modelId": "claude-3-sonnet-training-001",
+  "workflowId": "ml-training-claude-3-sonnet-training-001-1234567890",
+  "runId": "abc123...",
+  "message": "ML training started successfully",
+  "uiLink": "http://localhost:8233/namespaces/default/workflows/..."
+}
+```
+
+#### 2. Check Training Progress
+
+```bash
+# Replace <workflowId> with actual workflow ID from step 1
+curl http://localhost:3001/api/ml-training/<workflowId> | jq
+```
+
+**Response**:
+```json
+{
+  "modelId": "claude-3-sonnet-training-001",
+  "status": "training",
+  "currentEpoch": 15,
+  "totalEpochs": 100,
+  "currentLoss": 1.234,
+  "bestLoss": 1.150,
+  "checkpoints": [
+    {
+      "checkpointId": "chk_abc123",
+      "epoch": 10,
+      "loss": 1.456,
+      "s3Path": "s3://anthropic-checkpoints/...",
+      "merkleRoot": "0x123abc..."
+    }
+  ]
+}
+```
+
+#### 3. Send Researcher Decision
+
+After training reaches epoch 20 (review interval), researcher can decide:
+
+```bash
+# Continue training
+curl -X POST http://localhost:3001/api/ml-training/<workflowId>/decision \
+  -H "Content-Type: application/json" \
+  -d '{
+    "action": "continue",
+    "reason": "Loss is decreasing steadily"
+  }'
+
+# Adjust hyperparameters
+curl -X POST http://localhost:3001/api/ml-training/<workflowId>/decision \
+  -H "Content-Type: application/json" \
+  -d '{
+    "action": "adjust",
+    "reason": "Learning rate too high",
+    "newHyperparameters": {
+      "learningRate": 0.00005,
+      "batchSize": 32,
+      "epochs": 100,
+      "optimizer": "AdamW"
+    }
+  }'
+
+# Stop training early
+curl -X POST http://localhost:3001/api/ml-training/<workflowId>/decision \
+  -H "Content-Type: application/json" \
+  -d '{
+    "action": "stop",
+    "reason": "Model has converged"
+  }'
+```
+
+#### 4. View Training in Temporal UI
+
+Open http://localhost:8233 and navigate to your workflow to see:
+- ✅ Real-time training progress
+- ✅ Complete execution history with all epochs
+- ✅ Checkpoint creation events
+- ✅ Researcher decision signals
+- ✅ Seeded random number generation (deterministic)
+
 ---
 
 ## 📖 Project Structure
@@ -354,24 +518,32 @@ curl http://localhost:3001/api/orders/order-001 | jq
 temporal-ecommerce/
 ├── src/
 │   ├── workflows/
-│   │   └── order-workflow.ts       # Main order workflow (Saga pattern)
+│   │   ├── index.ts                # Workflow exports
+│   │   ├── order-workflow.ts       # Order workflow (Saga pattern)
+│   │   └── ml-training-workflow.ts # ML training (Checkpoint recovery)
 │   ├── activities/
+│   │   ├── index.ts                # Activity exports
 │   │   ├── inventory.ts            # Inventory operations + compensation
 │   │   ├── payment.ts              # Payment processing + refunds
-│   │   └── shipping.ts             # Shipment creation + cancellation
+│   │   ├── shipping.ts             # Shipment creation + cancellation
+│   │   └── ml-training.ts          # Training activities + checkpoints
 │   ├── api/
-│   │   └── server.ts               # REST API (Express)
+│   │   └── server.ts               # REST API (Express) - both workflows
 │   ├── utils/
 │   │   └── logger.ts               # Winston logger
 │   ├── types.ts                    # TypeScript types
-│   └── worker.ts                   # Temporal worker
+│   └── worker.ts                   # Temporal worker (dual task queues)
 ├── tests/
 │   └── integration/
 │       └── order-workflow.test.ts  # Workflow integration tests
 ├── examples/
 │   ├── order1.json                 # Normal order example
-│   └── order-high-value.json       # High-value order example
+│   ├── order-high-value.json       # High-value order example
+│   └── ml-training-config.json     # ML training config example
 ├── docs/                           # Additional documentation
+│   ├── SAGA_PATTERN.md             # Deep dive on Saga pattern
+│   ├── ANTHROPIC_ALIGNMENT.md      # Anthropic interview alignment
+│   └── INTERVIEW_GUIDE.md          # Interview scenarios & demos
 ├── docker-compose.yml              # Temporal server setup
 ├── test-system.sh                  # Automated system test
 └── package.json
@@ -501,6 +673,76 @@ setHandler(orderStateQuery, () => state);
 const currentState = await handle.query(orderStateQuery);
 console.log(currentState.status); // "awaiting_approval"
 ```
+
+### 5. Checkpoint Recovery (ML Training)
+
+**The Problem**: Training crashes at epoch 150 of 200. Should we start over?
+
+**Without Temporal**:
+```typescript
+// ❌ Start from scratch, waste $75K in compute
+for (let epoch = 0; epoch < 200; epoch++) {
+  await trainEpoch(epoch); // Re-run epochs 0-149 😭
+}
+```
+
+**With Temporal + Checkpoints**:
+```typescript
+// ✅ Resume from epoch 140, save $70K in compute
+for (let epoch = resumeEpoch; epoch < totalEpochs; epoch++) {
+  const result = await trainEpoch({ epoch, ... });
+
+  // Save checkpoint every 10 epochs
+  if ((epoch + 1) % 10 === 0) {
+    const checkpoint = await saveCheckpoint({
+      modelId: config.modelId,
+      epoch: epoch + 1,
+      loss: result.loss,
+      // Includes S3 path + Merkle root for audit
+    });
+    state.checkpoints.push(checkpoint);
+  }
+}
+```
+
+**Key insight**: Temporal caches activity results in history. If `trainEpoch(5)` completed successfully, it will **never be re-executed** on replay. Checkpoints reference S3, keeping history size manageable.
+
+### 6. Seeded Randomness (Reproducible Experiments)
+
+**The Challenge**: ML training requires randomness (batch shuffling), but Temporal requires determinism.
+
+**Solution**: Seeded RNG using workflow ID
+```typescript
+// Deterministic PRNG implementation
+class SeededRNG {
+  constructor(seed: number) {
+    this.state = seed % 2147483647;
+  }
+
+  next(): number {
+    // Linear congruential generator
+    this.state = (this.state * 48271) % 2147483647;
+    return (this.state - 1) / 2147483646; // [0, 1)
+  }
+}
+
+// In workflow
+const seed = config.randomSeed || hashWorkflowId(workflowInfo().workflowId);
+const rng = new SeededRNG(seed);
+
+// Use for batch shuffling
+for (let epoch = 0; epoch < totalEpochs; epoch++) {
+  const shuffleSeed = rng.nextInt(0, 1000000); // Deterministic!
+  await trainEpoch({ epoch, shuffleSeed });
+}
+```
+
+**Why it works**:
+- **First execution**: RNG generates random numbers based on workflow ID
+- **Replay after crash**: Same workflow ID → same RNG sequence → same results
+- **Researcher override**: Signal with explicit seed for A/B testing
+
+**Result**: Reproducible experiments by default, with escape hatch for exploration.
 
 ---
 
@@ -675,9 +917,10 @@ Tests the complete system end-to-end.
 - [Workflow Patterns](https://docs.temporal.io/patterns)
 
 ### This Project
-- [Architecture Deep Dive](./docs/ARCHITECTURE.md)
 - [Saga Pattern Explained](./docs/SAGA_PATTERN.md)
-- [Workflow Diagrams](./docs/WORKFLOW_DIAGRAMS.md)
+- [Anthropic Interview Alignment](./ANTHROPIC_ALIGNMENT.md) - How this maps to AI/ML requirements
+- [Interview Guide](./INTERVIEW_GUIDE.md) - Using this project in interviews
+- [Quality Report](./QUALITY_REPORT.md) - Project quality assessment
 
 ### Related Projects
 - [Temporal Samples](https://github.com/temporalio/samples-typescript)
@@ -736,12 +979,23 @@ MIT License - see [LICENSE](./LICENSE) for details.
 
 ## 💡 Key Takeaways
 
+### General Temporal Principles
 1. **Temporal workflows are deterministic** - all non-deterministic operations (API calls, random, Date.now()) must be in Activities
 2. **State is automatically persisted** - workflows survive crashes and restarts
-3. **Compensation is built-in** - Saga pattern without manual rollback code
-4. **Long-running is easy** - workflows can run for months with timers
-5. **Testing is simple** - replay-based testing without external dependencies
-6. **Visibility is complete** - see every step in Temporal UI
-7. **Versioning is safe** - deploy new code without breaking running workflows
+3. **Testing is simple** - replay-based testing without external dependencies
+4. **Visibility is complete** - see every step in Temporal UI
+5. **Versioning is safe** - deploy new code without breaking running workflows
+
+### E-commerce Workflow Insights
+6. **Compensation is built-in** - Saga pattern without manual rollback code
+7. **Long-running is easy** - workflows can run for months with timers
+8. **Idempotency is critical** - activities must be safe to retry
+
+### ML Training Workflow Insights
+9. **Checkpoints save millions** - Resume from epoch N instead of epoch 0
+10. **Seeded RNG enables reproducibility** - Deterministic randomness using workflow ID
+11. **Activity result caching is free optimization** - Temporal never re-runs successful activities
+12. **Cryptographic audit trails** - Merkle roots provide tamper-evident model lineage
+13. **Human-in-the-loop is first-class** - Workflows can wait days for researcher decisions
 
 **Build once with Temporal, run reliably forever.**
