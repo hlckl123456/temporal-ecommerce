@@ -13,6 +13,94 @@
   <img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg" alt="PRs Welcome">
 </p>
 
+> **Note**: This repository is named `temporal-ecommerce` but contains **three complete production workflows**—e-commerce (Saga pattern), ML training (checkpoint recovery), and autonomous agent analysis (multi-agent coordination). It's a comprehensive Temporal patterns showcase, not just an e-commerce demo.
+
+---
+
+## 🎯 Why This Project?
+
+**For Anthropic/AI company interviewees**: This project demonstrates **ALL patterns from Anthropic's agent workflow strategy**—crash recovery, budget tracking, multi-agent coordination, adaptive execution. Perfect showcase for autonomous agent infrastructure interviews.
+
+**For Temporal learners**: Goes **beyond basic tutorials**. Shows production patterns: Saga compensation, checkpoint recovery, child workflows, budget gates. **3 complete workflows**, **2,000+ lines** of production-grade TypeScript with comprehensive documentation.
+
+**For solution architects**: Reference implementation for distributed systems. See how to handle:
+- 💰 **$100K+ ML training crashes** → Resume from checkpoint, not restart
+- 🤖 **Multi-agent orchestration** → Coordinate specialist agents with dependency management
+- 💸 **Budget overruns** → Automatic pause and approval gates
+- 👥 **Human-in-the-loop** → Wait hours/days for approvals without holding resources
+
+## 👥 Who Is This For?
+
+- 🎤 **Interview candidates** preparing for Anthropic, OpenAI, or similar autonomous agent infrastructure roles
+- 📚 **Engineers learning Temporal** who want to see real production patterns, not toy examples
+- 🏗️ **Solution architects** designing workflow orchestration for complex distributed systems
+- 🤖 **AI infrastructure teams** building agent coordination platforms with durable execution
+- 💼 **Engineering managers** evaluating Temporal for their organization
+
+## 📖 Table of Contents
+
+- [Why This Project?](#-why-this-project)
+- [5-Minute Quick Demo](#-5-minute-quick-demo)
+- [Three Production Workflows](#-three-production-workflows)
+- [The Problem](#-the-problem-distributed-transaction-hell)
+- [Quick Start](#-quick-start)
+- [Testing Guide](#-testing-the-system)
+  - [E-commerce Order Processing](#testing-order-processing)
+  - [ML Training Workflow](#testing-ml-training-workflow)
+  - [Agent Codebase Analysis](#testing-agent-codebase-analysis-workflow)
+- [Deep Dive: How It Works](#-deep-dive-how-it-works)
+- [Project Structure](#-project-structure)
+- [Architecture](#-architecture)
+- [Key Takeaways](#-key-takeaways)
+- [Interview Alignment](./ANTHROPIC_ALIGNMENT.md)
+- [Production Deployment](#-production-deployment)
+- [Resources](#-resources)
+
+---
+
+## ⚡ 5-Minute Quick Demo
+
+**Want to see crash recovery in action?** This is Temporal's killer feature for agent infrastructure.
+
+```bash
+# Terminal 1: Start everything (Temporal + Worker + API)
+pnpm install
+pnpm run docker:up
+# Wait 10 seconds for Temporal to start
+pnpm run worker &
+pnpm run api &
+
+# Terminal 2: Start agent analysis (analyzes 20 files)
+curl -X POST http://localhost:3001/api/agent/analyze \
+  -H "Content-Type: application/json" \
+  -d @examples/codebase-analysis-config.json
+
+# Wait 5 seconds, then check progress
+curl http://localhost:3001/api/agent/analyze/agent-analysis-analysis-001 | jq .filesAnalyzed
+# Output: 12
+
+# NOW: Kill Terminal 1 workers (Ctrl+C) - simulate crash!
+
+# Restart worker in Terminal 1
+pnpm run worker &
+
+# Check progress again - RESUMES FROM FILE 13, NOT FILE 0!
+curl http://localhost:3001/api/agent/analyze/agent-analysis-analysis-001 | jq .filesAnalyzed
+# Output: 13, then 14, 15... (continues without re-analyzing files 0-12)
+```
+
+**What just happened?**
+- ✅ Workflow analyzed files 0-12 (cached in Temporal history)
+- ❌ Worker crashed
+- ✅ On restart, Temporal **replayed** the workflow using cached results
+- ✅ Resumed from file 13 without re-running analysis for files 0-12
+
+**That's crash recovery.** No manual state management, no lost work, seamless UX.
+
+Open http://localhost:8233 to see the workflow history with all cached activity results.
+
+See [Complete Testing Guide](#-testing-the-system) for more scenarios.
+
 ---
 
 ## 🎯 Three Production Workflows
@@ -288,6 +376,107 @@ flowchart TD
     style Rollback fill:#ffe6e6
     style Resume fill:#e6f3ff
 ```
+
+---
+
+## 🏗️ Architecture
+
+### System Overview
+
+```mermaid
+graph TB
+    subgraph "Client Layer"
+        User[👤 User/Engineer]
+        API[REST API Server<br/>Express - Port 3001<br/>12 endpoints]
+    end
+
+    subgraph "Temporal Core Infrastructure"
+        Server[Temporal Server<br/>Port 7233<br/>Workflow Orchestration]
+        UI[Temporal UI<br/>Port 8233<br/>Observability Dashboard]
+        DB[(PostgreSQL<br/>History Store<br/>Event Sourcing)]
+    end
+
+    subgraph "Worker Layer - Executes Workflows & Activities"
+        W1[Order Worker<br/>Task Queue: order-processing<br/>Handles Saga Pattern]
+        W2[ML Worker<br/>Task Queue: ml-training<br/>Handles Checkpoints]
+        W3[Agent Worker<br/>Task Queue: agent-tasks<br/>Handles Multi-Agent]
+    end
+
+    subgraph "Workflow Types"
+        WF1[🛍️ Order Workflow<br/>Saga Pattern<br/>Automatic Compensation]
+        WF2[🤖 ML Training<br/>Checkpoint Recovery<br/>Seeded Randomness]
+        WF3[🤖 Agent Analysis<br/>Multi-Agent Coordination<br/>Budget Tracking]
+    end
+
+    subgraph "Activities - Side Effects"
+        A1[Inventory, Payment,<br/>Shipping Activities]
+        A2[Training, Checkpoint,<br/>Evaluation Activities]
+        A3[Analyze, Refactor,<br/>Budget Activities]
+    end
+
+    User -->|HTTP Requests| API
+    API -->|Start/Query Workflows| Server
+    Server -->|Store Events| DB
+    Server -->|Task Assignment| W1
+    Server -->|Task Assignment| W2
+    Server -->|Task Assignment| W3
+
+    W1 -.->|Execute| WF1
+    W2 -.->|Execute| WF2
+    W3 -.->|Execute| WF3
+
+    WF1 -->|Call| A1
+    WF2 -->|Call| A2
+    WF3 -->|Call| A3
+
+    UI -.->|Monitor| Server
+
+    style User fill:#e1f5e1
+    style Server fill:#e6f3ff
+    style DB fill:#fff4e6
+    style WF3 fill:#ffe6e6
+```
+
+### Key Architectural Components
+
+| Component | Technology | Purpose | Scale |
+|-----------|-----------|---------|-------|
+| **API Server** | Express.js | REST endpoints for workflow control | Stateless, horizontally scalable |
+| **Temporal Server** | Temporal OSS | Workflow orchestration engine | Self-hosted, multi-region capable |
+| **Workers** | TypeScript | Execute workflows and activities | Auto-scaling based on queue depth |
+| **History DB** | PostgreSQL | Event sourcing storage | Replicated, backed up |
+| **Temporal UI** | React | Real-time workflow observability | Read-only, no state |
+
+### Data Flow Example: Agent Analysis with Crash Recovery
+
+```
+User starts analysis
+    ↓
+API creates workflow → Temporal Server persists event
+    ↓
+Agent Worker picks up task
+    ↓
+Workflow executes: analyzeFile(0), analyzeFile(1), ... analyzeFile(12)
+    ↓
+Each activity result cached in History DB
+    ↓
+❌ WORKER CRASHES ❌
+    ↓
+New worker starts → Temporal Server assigns workflow
+    ↓
+Workflow REPLAYS:
+  - Sees analyzeFile(0-12) already completed
+  - Uses cached results from History DB
+  - Continues from analyzeFile(13)
+    ↓
+✅ Seamless recovery, no lost work
+```
+
+**Why this architecture matters**:
+- ✅ **Crash recovery**: History DB + deterministic replay = automatic resume
+- ✅ **Horizontal scaling**: Add more workers, no state coordination needed
+- ✅ **Observability**: Every workflow step visible in Temporal UI
+- ✅ **Cost efficiency**: Workers only consume resources during active execution
 
 ---
 

@@ -117,6 +117,196 @@ const rng = new SeededRNG(seed);
 
 ---
 
+### Scenario 7: "How do you handle crash recovery for autonomous agents?"
+
+**Your answer (using Agent Codebase Analysis workflow)**:
+
+**Step 1: Explain the problem**
+> "Autonomous agents run long tasks—analyzing 100 files, refactoring a codebase over hours. Users close laptops, servers restart, networks fail. Traditional approaches lose progress and restart from scratch. That's terrible UX for a 2-hour task."
+
+**Step 2: Show the crash recovery pattern**
+
+Open `src/workflows/agent-codebase-workflow.ts:130-165`
+
+```typescript
+// File-by-file analysis with automatic crash recovery
+const analyses = [];
+
+for (let i = 0; i < task.files.length; i++) {
+    // Each file analysis is an activity (durable)
+    const analysis = await analyzeFile(files[i]);
+    analyses.push(analysis);
+
+    // ✅ CRASH HERE? Resume from file i+1, NOT file 0
+
+    state.filesAnalyzed = i + 1;
+    state.lastUpdateTime = Date.now();
+}
+```
+
+> "Every file analysis is an activity. Temporal caches the result in history. If worker crashes at file 47, replay sees files 0-46 already completed, uses cached results, continues from file 47."
+
+**Step 3: Live demo**
+```bash
+# Start analysis of 20 files
+curl -X POST http://localhost:3001/api/agent/analyze -d @examples/codebase-analysis-config.json
+
+# Check progress
+curl http://localhost:3001/api/agent/analyze/<workflowId> | jq .filesAnalyzed
+# Output: 12
+
+# Kill worker (simulate crash)
+
+# Restart worker
+
+# Check progress - resumes from file 13!
+curl http://localhost:3001/api/agent/analyze/<workflowId> | jq .filesAnalyzed
+# Output: 13, 14, 15... (no re-analysis of 0-12)
+```
+
+**Step 4: Why this matters**
+> "For Claude Code, this means:
+> - User starts multi-hour refactor
+> - Server restarts for deployment
+> - Workflow resumes exactly where it left off
+> - User doesn't even notice
+>
+> **This is the killer feature for agent infrastructure.** No manual state management, no lost work, seamless UX."
+
+**Show them**: Open Temporal UI at http://localhost:8233, navigate to workflow, show cached activity results in history
+
+---
+
+### Scenario 8: "How do you prevent runaway costs in agent workflows?"
+
+**Your answer (using Budget Tracking pattern)**:
+
+**Step 1: The problem**
+> "Agents call expensive APIs—GPT-4, Claude. Without controls, a buggy agent could rack up $10K in API costs overnight. Need defense in depth."
+
+**Step 2: Show the budget tracking implementation**
+
+Open `src/workflows/agent-codebase-workflow.ts:170-190`
+
+```typescript
+// Track cost after each activity
+state.costSoFar += analysis.cost;
+
+// Check budget threshold
+if (state.costSoFar > (task.budget || 100)) {
+    state.status = 'budget_exceeded';
+
+    // Notify user
+    await notifyUser(
+        `Budget exceeded: $${state.costSoFar} > $${task.budget}`
+    );
+
+    // Wait for approval (with timeout)
+    const approval = await condition(
+        () => budgetApproval !== undefined,
+        '1 hour'
+    );
+
+    if (!approval || !budgetApproval.approved) {
+        return { status: 'cancelled', reason: 'budget-exceeded' };
+    }
+
+    // Continue with increased budget
+    if (budgetApproval.newBudget) {
+        state.budgetRemaining = budgetApproval.newBudget - state.costSoFar;
+    }
+}
+```
+
+**Step 3: Defense layers**
+> "Four layers of defense:
+> 1. **Workflow-level budget tracking** - Check after every expensive activity
+> 2. **Approval gates with timeout** - Human must approve within 1 hour or auto-cancel
+> 3. **Activity-level cost estimation** - Each activity reports its cost
+> 4. **Platform circuit breakers** - Max concurrent workflows per user
+>
+> The workflow **suspends efficiently** while waiting for approval—no resource consumption."
+
+**Step 4: Demo the approval flow**
+```bash
+# Start analysis with $5 budget
+curl -X POST http://localhost:3001/api/agent/analyze -d @examples/codebase-analysis-config.json
+
+# Check status - will show budget_exceeded after ~50 files
+curl http://localhost:3001/api/agent/analyze/<workflowId> | jq .status
+# Output: "budget_exceeded"
+
+# Approve budget increase
+curl -X POST http://localhost:3001/api/agent/analyze/<workflowId>/approve-budget \
+  -d '{"approved": true, "newBudget": 10.0, "reason": "Critical analysis"}'
+
+# Workflow resumes automatically
+```
+
+**Key insight**:
+> "At Anthropic's scale, a single runaway agent could cost $100K. Budget gates + approval timeouts + automatic cancellation = defense in depth. The $1M/year investment in this platform prevents millions in waste."
+
+---
+
+### Scenario 9: "How do you coordinate multiple specialist agents?"
+
+**Your answer (using Multi-Agent Coordination pattern)**:
+
+**Step 1: The use case**
+> "Complex tasks need multiple specialists. Building a web app: need UI designer, backend architect, security auditor. They have dependencies—security can't run until backend is designed—but some can run in parallel."
+
+**Step 2: Show child workflow pattern**
+
+Open `src/workflows/agent-codebase-workflow.ts:260-320`
+
+```typescript
+async function multiAgentCodebaseWorkflow(project) {
+    // Phase 1: Parallel independent analysis
+    const [architecture, security] = await Promise.all([
+        executeChild(codebaseAnalysisWorkflow, {
+            workflowId: `${project}-architecture`,
+            analysisType: 'architectural'
+        }),
+        executeChild(codebaseAnalysisWorkflow, {
+            workflowId: `${project}-security`,
+            analysisType: 'security'
+        })
+    ]);
+
+    // Phase 2: Dependent analysis (needs architecture results)
+    const performance = await executeChild(codebaseAnalysisWorkflow, {
+        workflowId: `${project}-performance`,
+        analysisType: 'performance'
+    });
+
+    return { architecture, security, performance };
+}
+```
+
+**Step 3: Why child workflows?**
+> "Four advantages:
+> 1. **Parallel execution** - Architecture and security run concurrently
+> 2. **Failure isolation** - If security fails, don't re-run architecture
+> 3. **Separate history** - Each child has its own history, no pollution
+> 4. **Observable dependencies** - Temporal UI shows parent → child relationships"
+
+**Step 4: Show the execution**
+```bash
+# Start multi-agent workflow
+curl -X POST http://localhost:3001/api/agent/multi-agent \
+  -d '{"projectName": "my-app", "requirements": ["security", "performance"]}'
+
+# Open Temporal UI: http://localhost:8233
+# Navigate to parent workflow → see child workflows linked
+# Architecture + Security run in parallel
+# Performance waits for architecture to complete
+```
+
+**Interview talking point**:
+> "This is exactly how Claude Code coordinates specialist agents—one analyzes architecture, another checks security, another reviews tests. They run in parallel where independent, sequential with dependencies. Parent workflow orchestrates, children execute. If one fails, we don't restart the others. **Failure isolation FTW.**"
+
+---
+
 ### Scenario 5: "What are the trade-offs of using Temporal vs building custom orchestration?"
 
 **Your answer**:

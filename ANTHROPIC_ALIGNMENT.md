@@ -1,6 +1,6 @@
 ## 🎯 How This Project Aligns with Anthropic's Workflow Requirements
 
-This document maps the temporal-ecommerce project features to the core concepts discussed in Anthropic interviews about workflow systems for AI/ML training.
+This document maps the temporal-ecommerce project features to the core concepts discussed in Anthropic interviews about workflow systems for AI/ML training and **autonomous agent infrastructure**.
 
 ---
 
@@ -9,20 +9,23 @@ This document maps the temporal-ecommerce project features to the core concepts 
 | Anthropic Requirement | Implementation in This Project | Location |
 |----------------------|--------------------------------|----------|
 | **Durable Execution** | Workflows survive crashes and restarts | All workflows |
-| **Saga Pattern** | Automatic compensation on failures | `order-workflow.ts:240-296` |
+| **Saga Pattern** | Automatic compensation on failures | `order-workflow.ts:259`, `agent-codebase-workflow.ts:170` |
 | **Event Sourcing** | Append-only history with replay | Temporal Server |
-| **Checkpoint Recovery** | Resume from saved state (ML training) | `ml-training-workflow.ts:167-177` |
-| **Seeded Randomness** | Deterministic RNG for reproducibility | `ml-training-workflow.ts:90-108` |
-| **Human-in-the-Loop** | Wait for researcher/admin decisions | `order-workflow.ts:165-195`, `ml-training-workflow.ts:185-206` |
-| **Long-Running Processes** | Workflows run for days/weeks | `sleep('7 days')`, epoch loops |
+| **Checkpoint Recovery** | Resume from saved state | `ml-training-workflow.ts:227`, `agent-codebase-workflow.ts:130-165` |
+| **Seeded Randomness** | Deterministic RNG for reproducibility | `ml-training-workflow.ts:119-136` |
+| **Human-in-the-Loop** | Wait for researcher/admin decisions | All three workflows |
+| **Long-Running Processes** | Workflows run for days/weeks | `sleep('7 days')`, epoch loops, file analysis |
 | **Cryptographic Audit** | Merkle root in checkpoints | `ml-training.ts:185-201` |
 | **Activity Idempotency** | Safe to retry activities | All activities |
-| **State Queries** | Real-time state inspection | `orderStateQuery`, `trainingStateQuery` |
-| **Signals for Events** | External events trigger actions | `approveOrderSignal`, `researcherDecisionSignal` |
+| **State Queries** | Real-time state inspection | `orderStateQuery`, `trainingStateQuery`, `analysisStateQuery` |
+| **Signals for Events** | External events trigger actions | 6 signal types across workflows |
+| **Budget Tracking** | Prevent runaway costs | `agent-codebase-workflow.ts:170-190` |
+| **Multi-Agent Coordination** | Child workflows for specialist agents | `agent-codebase-workflow.ts:260-320` |
+| **Adaptive Execution** | Strategy switching based on results | `agent-codebase-workflow.ts:360-400` |
 
 ---
 
-## 🧪 Two Workflow Examples (E-commerce + ML Training)
+## 🧪 Three Workflow Examples (E-commerce + ML Training + Agent Analysis)
 
 ### 1. E-commerce Order Processing (`order-workflow.ts`)
 
@@ -46,6 +49,23 @@ This document maps the temporal-ecommerce project features to the core concepts 
 
 **Interview talking point**:
 > "This directly mirrors Anthropic's training workflows. If RLHF fails after 2-week pre-training ($50K compute), we resume from checkpoint instead of restarting. The seeded RNG ensures reproducibility while allowing researcher overrides via signals."
+
+### 3. Agent Codebase Analysis (`agent-codebase-workflow.ts`)
+
+**Demonstrates**:
+- ✅ **Crash recovery** - Resume file analysis from file N after worker crash, not file 0
+- ✅ **Budget tracking** - Pause when cost exceeds budget, request approval to continue
+- ✅ **Multi-agent coordination** - Child workflows for specialist agents (architecture, security, performance)
+- ✅ **Adaptive execution** - Switch strategies (breadth-first ↔ depth-first) based on quality metrics
+- ✅ **Human-in-the-loop** - Two approval gates: refactor plan approval + budget increase approval
+- ✅ **Compensation** - Rollback refactored batches if tests fail
+- ✅ **Fire-and-forget progress** - Real-time UI updates without breaking determinism
+
+**Interview talking point**:
+> "This is the **autonomous agent infrastructure** pattern. Mirrors Claude Code's architecture—file-by-file analysis with crash recovery (resume from file N), budget gates to prevent runaway LLM API costs, multi-agent coordination where specialist agents run in parallel. If the architecture analyzer fails, we don't re-run the security analyzer. This is exactly the pattern Anthropic needs for long-running coding sessions where users close their laptops mid-refactor."
+
+**Key insight**:
+> "The **crash recovery demo** is our killer feature showcase. Start analyzing 20 files, kill worker at file 12, restart → resumes from file 13 using cached results for files 0-12. No manual state management, no lost work, seamless UX. This is why Temporal matters for agents."
 
 ---
 
