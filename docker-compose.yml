@@ -1,0 +1,54 @@
+version: '3.3'
+
+services:
+  # PostgreSQL for Temporal
+  postgresql:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_PASSWORD: temporal
+      POSTGRES_USER: temporal
+    ports:
+      - 5432:5432
+    volumes:
+      - temporal-postgres:/var/lib/postgresql/data
+    networks:
+      - temporal-network
+
+  # Temporal Server
+  temporal:
+    image: temporalio/auto-setup:1.25.2
+    depends_on:
+      - postgresql
+    environment:
+      - DB=postgresql
+      - DB_PORT=5432
+      - POSTGRES_USER=temporal
+      - POSTGRES_PWD=temporal
+      - POSTGRES_SEEDS=postgresql
+      - DYNAMIC_CONFIG_FILE_PATH=config/dynamicconfig/development-sql.yaml
+    ports:
+      - 7233:7233
+    networks:
+      - temporal-network
+    labels:
+      kompose.volume.type: configMap
+
+  # Temporal Web UI
+  temporal-ui:
+    image: temporalio/ui:2.33.2
+    depends_on:
+      - temporal
+    environment:
+      - TEMPORAL_ADDRESS=temporal:7233
+      - TEMPORAL_CORS_ORIGINS=http://localhost:3000,http://localhost:3001
+    ports:
+      - 8233:8080
+    networks:
+      - temporal-network
+
+volumes:
+  temporal-postgres:
+
+networks:
+  temporal-network:
+    driver: bridge

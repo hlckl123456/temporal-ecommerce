@@ -1,0 +1,30 @@
+{
+  "orderId": "order-001",
+  "customerId": "customer-123",
+  "items": [
+    {
+      "productId": "product-1",
+      "productName": "Laptop",
+      "quantity": 1,
+      "price": 1299.99
+    },
+    {
+      "productId": "product-2",
+      "productName": "Mouse",
+      "quantity": 2,
+      "price": 29.99
+    }
+  ],
+  "totalAmount": 1359.97,
+  "shippingAddress": {
+    "street": "123 Main St",
+    "city": "San Francisco",
+    "state": "CA",
+    "zipCode": "94102",
+    "country": "USA"
+  },
+  "paymentMethod": {
+    "type": "credit_card",
+    "last4": "4242"
+  }
+}

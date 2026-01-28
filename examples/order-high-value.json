@@ -1,0 +1,24 @@
+{
+  "orderId": "order-002-hv",
+  "customerId": "customer-456",
+  "items": [
+    {
+      "productId": "product-3",
+      "productName": "Enterprise Server",
+      "quantity": 10,
+      "price": 899.99
+    }
+  ],
+  "totalAmount": 8999.90,
+  "shippingAddress": {
+    "street": "456 Corporate Blvd",
+    "city": "New York",
+    "state": "NY",
+    "zipCode": "10001",
+    "country": "USA"
+  },
+  "paymentMethod": {
+    "type": "credit_card",
+    "last4": "9999"
+  }
+}
